@@ -41,6 +41,13 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
 
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
   worker:
     build: ./backend
     command: ["python", "-m", "app.worker"]

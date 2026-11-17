@@ -22,6 +22,7 @@ class Scripts:
         self.mark_paid = load("mark_paid")
         self.admit = load("admit")
         self.rate_limit = load("rate_limit")
+        self.push_event = load("push_event")
 
 
 class Context:

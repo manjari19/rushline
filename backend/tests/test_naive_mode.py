@@ -32,3 +32,11 @@ async def test_naive_mode_works_without_concurrency(client, ctx):
              for i in range(5)]
     assert codes == [201, 201, 201, 409, 409]
     assert (await stats(client))["oversold_units"] == 0
+
+
+async def test_naive_mode_feeds_activity(client, ctx):
+    await start_sale(client, 1, mode="naive")
+    await client.post("/naive/checkout", json={"buyer_id": "a"})
+    await client.post("/naive/checkout", json={"buyer_id": "b"})
+    feed = (await client.get("/admin/events")).json()["events"]
+    assert [(e["buyer_id"], e["event"]) for e in feed] == [("b", "rejected"), ("a", "confirmed")]

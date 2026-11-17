@@ -1,9 +1,10 @@
 """Admin: create or reset a sale, read live stats."""
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .. import events, rush
 from ..sales import create_sale, require_sale
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -21,6 +22,23 @@ async def create_or_reset_sale(body: SaleIn, request: Request):
     """Creating a sale also resets everything: a new product row and clean Redis state."""
     sale = await create_sale(request.app.state.ctx, body.name, body.price_cents, body.stock, body.mode)
     return {"sale_id": sale.id, "mode": sale.mode, "stock": sale.initial_stock}
+
+
+class RushIn(BaseModel):
+    buyers: int = Field(1000, ge=1, le=20_000)
+    ramp_seconds: float = Field(5, ge=0, le=60)
+    abandon_rate: float = Field(0.05, ge=0, le=1)  # share of buyers who reserve but never pay
+
+
+@router.post("/rush", status_code=202)
+async def start_rush(body: RushIn, request: Request):
+    """Unleash simulated buyers on the active sale."""
+    ctx = request.app.state.ctx
+    sale = await require_sale(ctx)
+    if (await rush.read_status(ctx, sale))["running"]:
+        raise HTTPException(409, {"code": "rush_running", "message": "A rush is already running."})
+    await rush.start(request.app, ctx, sale, body.buyers, body.ramp_seconds, body.abandon_rate)
+    return {"started": body.buyers}
 
 
 async def collect_stats(request: Request) -> dict:
@@ -49,6 +67,7 @@ async def collect_stats(request: Request) -> dict:
         "oversold_units": max(0, confirmed - sale.initial_stock),
         "rps": series[-1]["rps"],
         "avg_latency_ms": series[-1]["avg_ms"],
+        "rush": await rush.read_status(ctx, sale),
         "series": series,
     }
 
@@ -56,3 +75,11 @@ async def collect_stats(request: Request) -> dict:
 @router.get("/stats")
 async def stats(request: Request):
     return await collect_stats(request)
+
+
+@router.get("/events")
+async def recent_events(request: Request, limit: int = 15):
+    """Most recent buyer events (newest first) for the Live activity table."""
+    ctx = request.app.state.ctx
+    sale = await require_sale(ctx)
+    return {"events": await events.recent(ctx, sale, min(max(limit, 1), events.MAX_EVENTS))}

@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     payment_max_ms: int = 800
     payment_failure_rate: float = 0.05
 
+    activity_log: bool = True               # feed for the dashboard's Live activity table
+
     # Artificial "business logic" delay inside the naive checkout (0 = none).
     naive_think_ms: int = 0
 

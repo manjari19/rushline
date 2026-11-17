@@ -7,6 +7,6 @@ Flash-sale checkout engine built to survive Black Friday style rushes: zero over
 ## Run the backend
 
 ```bash
-docker compose up --build        # API on http://localhost:8000 (docs at /docs)
+docker compose up --build        # UI on http://localhost:8080, API docs on http://localhost:8000/docs
 docker compose run --build --rm tests   # pytest, inside Python 3.12
 ```

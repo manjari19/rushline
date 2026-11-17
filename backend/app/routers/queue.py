@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from .. import tokens
+from .. import events, tokens
 from ..ratelimit import enforce_rate_limit
 from ..sales import require_sale
 
@@ -45,7 +45,9 @@ async def join(body: JoinIn, request: Request):
     k = sale.keys
     if not await ctx.redis.exists(k.admitted(body.buyer_id)):
         seq = await ctx.redis.incr(k.queue_seq)
-        await ctx.redis.zadd(k.queue, {body.buyer_id: seq}, nx=True)  # joining twice keeps your spot
+        added = await ctx.redis.zadd(k.queue, {body.buyer_id: seq}, nx=True)  # joining twice keeps your spot
+        if added:
+            await events.record(ctx, sale, body.buyer_id, "waiting")
     return await _status(ctx, sale, body.buyer_id)
 
 

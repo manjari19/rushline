@@ -4,6 +4,7 @@ import logging
 import time
 
 from .config import get_settings
+from . import events
 from .context import Context
 from .sales import get_active_sale
 
@@ -30,9 +31,12 @@ async def release_expired(ctx: Context) -> int:
     if sale is None or sale.mode != "safe":
         return 0
     k = sale.keys
-    return await ctx.scripts.expire(
+    buyers = await ctx.scripts.expire(
         keys=[k.reservations, k.stock], args=[time.time(), EXPIRY_BATCH, k.prefix]
     )
+    for buyer in buyers:
+        await events.record(ctx, sale, buyer, "expired")
+    return len(buyers)
 
 
 async def run() -> None:

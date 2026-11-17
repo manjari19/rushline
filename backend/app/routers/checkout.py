@@ -8,7 +8,7 @@ import asyncpg
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .. import tokens
+from .. import events, tokens
 from ..ratelimit import enforce_rate_limit
 from ..sales import require_sale
 
@@ -60,10 +60,13 @@ async def reserve(body: ReserveIn, request: Request, x_admission_token: str | No
         args=[reservation_id, body.buyer_id, now + ttl, sale.price_cents, ttl + 60],
     )
     if status == 0:
+        await events.record(ctx, sale, body.buyer_id, "rejected")
         raise error(409, "sold_out", "Sold out. Thanks for being here!")
     if status == 3:
         raise error(409, "already_purchased", "You already bought this item.")
 
+    if status == 1:
+        await events.record(ctx, sale, body.buyer_id, "reserved")
     expires_at = float(await ctx.redis.zscore(k.reservations, rid) or now + ttl)
     return {"reservation_id": rid, "expires_at": expires_at, "amount_cents": sale.price_cents,
             "resumed": status == 2}
@@ -140,6 +143,7 @@ async def confirm(
         consumed = True
 
         row = await _write_order(ctx, sale, buyer, body.reservation_id, idempotency_key)
+        await events.record(ctx, sale, buyer, "confirmed")
         return order_json(row, replayed=False)
     except BaseException:
         # Anything went wrong after we consumed the reservation: give the unit back.

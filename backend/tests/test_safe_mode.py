@@ -246,3 +246,108 @@ async def test_wrong_mode_is_rejected(client, ctx):
     await start_sale(client, 3, mode="safe")
     r = await client.post("/naive/checkout", json={"buyer_id": "x"})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "wrong_mode"
+
+
+async def test_simulated_rush_never_oversells(client, ctx, test_settings):
+    """The dashboard's rush button: 300 simulated buyers, 20 units, with abandoned carts."""
+    test_settings.reservation_ttl_seconds = 2
+    test_settings.admission_rate_per_second = 1000
+    await start_sale(client, 20)
+    r = await client.post("/admin/rush", json={"buyers": 300, "ramp_seconds": 1, "abandon_rate": 0.2})
+    assert r.status_code == 202
+
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        await admit(ctx, 100)
+        await release_expired(ctx)
+        s = await stats(client)
+        if not s["rush"]["running"]:
+            break
+        await asyncio.sleep(0.2)
+    assert not s["rush"]["running"]
+    assert s["confirmed_orders"] <= 20 and s["oversold_units"] == 0
+    assert s["rush"]["bought"] == s["confirmed_orders"]
+
+
+async def test_reset_mid_rush_cancels_old_buyers(client, ctx, test_settings):
+    """Resetting the sale during a rush must not let the old rush's buyers leak into the new sale."""
+    test_settings.admission_rate_per_second = 1000
+    await start_sale(client, 20)
+    await client.post("/admin/rush", json={"buyers": 300, "ramp_seconds": 2, "abandon_rate": 0})
+    await asyncio.sleep(0.3)
+    await start_sale(client, 20)  # the user clicks "Reset sale" mid-rush
+
+    for _ in range(25):  # 5 seconds of worker activity
+        await admit(ctx, 100)
+        await asyncio.sleep(0.2)
+    s = await stats(client)
+    assert s["queue_length"] == 0 and s["active_reservations"] == 0
+    assert s["confirmed_orders"] == 0 and s["stock_left"] == 20
+
+
+# ---------------------------------------------------------------- live activity feed
+
+async def events_of(client, limit=15):
+    return (await client.get("/admin/events", params={"limit": limit})).json()["events"]
+
+
+async def test_activity_feed_tracks_the_buyer_journey(client, ctx, test_settings):
+    test_settings.reservation_ttl_seconds = 1
+    await start_sale(client, 1)
+    token = await join_and_admit(client, ctx, "alice")
+    rid = (await reserve(client, "alice", token)).json()["reservation_id"]
+    await pay_until_ok(client, rid)
+    await confirm(client, rid, "k-alice")
+    token_b = await join_and_admit(client, ctx, "bob")
+    assert (await reserve(client, "bob", token_b)).status_code == 409  # sold out
+
+    feed = await events_of(client)
+    assert [(e["buyer_id"], e["event"]) for e in feed] == [
+        ("bob", "rejected"), ("bob", "waiting"),
+        ("alice", "confirmed"), ("alice", "reserved"), ("alice", "waiting"),
+    ]  # newest first
+    assert all(e["units"] == 1 and e["ts"] > 0 for e in feed)
+
+    # Expiry shows up too.
+    await start_sale(client, 1)
+    token = await join_and_admit(client, ctx, "carol")
+    await reserve(client, "carol", token)
+    await asyncio.sleep(1.2)
+    await release_expired(ctx)
+    latest = (await events_of(client, 1))[0]
+    assert (latest["buyer_id"], latest["event"]) == ("carol", "expired")
+
+
+async def test_activity_feed_is_capped_and_limit_respected(client, ctx):
+    await start_sale(client, 5)
+    for i in range(70):
+        await client.post("/queue/join", json={"buyer_id": f"b{i}"})
+    assert len(await events_of(client, 15)) == 15
+    assert len(await events_of(client, 500)) == 50  # capped at MAX_EVENTS
+    assert (await events_of(client, 1))[0]["buyer_id"] == "b69"
+
+
+async def test_activity_feed_can_be_disabled(client, ctx, test_settings):
+    test_settings.activity_log = False
+    await start_sale(client, 5)
+    await client.post("/queue/join", json={"buyer_id": "quiet"})
+    assert await events_of(client) == []
+
+
+async def test_sold_out_events_collapse_into_one_entry(client, ctx):
+    await start_sale(client, 1)
+    tokens = {b: await join_and_admit(client, ctx, b) for b in ["a", "b", "c", "d", "e"]}
+    for buyer, token in tokens.items():
+        await reserve(client, buyer, token)  # "a" reserves, b to e are sold out
+    feed = await events_of(client)
+    sold_out = [e for e in feed if e["event"] == "rejected"]
+    assert len(sold_out) == 1 and sold_out[0]["units"] == 4 and sold_out[0]["buyer_id"] == "e"
+
+    # A different event in between starts a new run.
+    await join_and_admit(client, ctx, "f")
+    token = await join_and_admit(client, ctx, "g")
+    await reserve(client, "g", token)
+    feed = await events_of(client)
+    assert [(e["event"], e["units"]) for e in feed[:4]] == [
+        ("rejected", 1), ("waiting", 1), ("waiting", 1), ("rejected", 4),
+    ]
