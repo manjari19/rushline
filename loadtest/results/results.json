@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "date": "2026-11-17",
+    "cpu": "Apple M5",
+    "cores": 10,
+    "memory_gb": 16,
+    "platform": "Darwin 25.5.0",
+    "bench_env": {
+      "ADMISSION_RATE_PER_SECOND": "1000",
+      "ACTIVITY_LOG": "false"
+    },
+    "total_minutes": 4.3
+  },
+  "results": [
+    {
+      "scenario": "steady",
+      "mode": "naive",
+      "description": "100 new buyers/s for 30 s, stock 10,000",
+      "stock": 10000,
+      "duration_s": 30.3,
+      "http_requests": 3001,
+      "throughput_rps": 100,
+      "buyers_per_s": 100,
+      "buyers": 3001,
+      "latency_ms": {
+        "p50": 2,
+        "p95": 3.7,
+        "p99": 6.4
+      },
+      "buy_latency_ms": {
+        "p50": 2,
+        "p95": 3.7,
+        "p99": 6.4
+      },
+      "error_rate_pct": 0,
+      "rate_limited": 0,
+      "buyers_purchased": 3001,
+      "buyers_sold_out": 0,
+      "buyers_abandoned": 0,
+      "confirmed_orders": 3001,
+      "oversold_units": 0,
+      "stock_left": 7003,
+      "reconcile_ok": true,
+      "reconcile_output": "[OK  ] sale 4 (naive): 3001 orders / 10000 units"
+    },
+    {
+      "scenario": "steady",
+      "mode": "safe",
+      "description": "100 new buyers/s for 30 s, stock 10,000",
+      "stock": 10000,
+      "duration_s": 33.2,
+      "http_requests": 15169,
+      "throughput_rps": 462.2,
+      "buyers_per_s": 91.4,
+      "buyers": 3001,
+      "latency_ms": {
+        "p50": 1,
+        "p95": 2.2,
+        "p99": 3
+      },
+      "buy_latency_ms": {
+        "p50": 0.8,
+        "p95": 1.1,
+        "p99": 1.5
+      },
+      "error_rate_pct": 0,
+      "rate_limited": 0,
+      "buyers_purchased": 3001,
+      "buyers_sold_out": 0,
+      "buyers_abandoned": 0,
+      "confirmed_orders": 3001,
+      "oversold_units": 0,
+      "stock_left": 6999,
+      "reconcile_ok": true,
+      "reconcile_output": "[OK  ] sale 5 (safe): 3001 orders / 10000 units"
+    },
+    {
+      "scenario": "spike",
+      "mode": "naive",
+      "description": "5,000 buyers at once, stock 100",
+      "stock": 100,
+      "duration_s": 4,
+      "http_requests": 5000,
+      "throughput_rps": 1415.2,
+      "buyers_per_s": 1415.2,
+      "buyers": 5000,
+      "latency_ms": {
+        "p50": 2446.3,
+        "p95": 3239.4,
+        "p99": 3280.6
+      },
+      "buy_latency_ms": {
+        "p50": 2446.3,
+        "p95": 3239.4,
+        "p99": 3280.6
+      },
+      "error_rate_pct": 0,
+      "rate_limited": 0,
+      "buyers_purchased": 5000,
+      "buyers_sold_out": 0,
+      "buyers_abandoned": 0,
+      "confirmed_orders": 5000,
+      "oversold_units": 4900,
+      "stock_left": 89,
+      "reconcile_ok": false,
+      "reconcile_output": "[FAIL] sale 6 (naive): 5000 orders / 100 units\n        - OVERSOLD: 5000 orders for 100 units (4900 too many)"
+    },
+    {
+      "scenario": "spike",
+      "mode": "safe",
+      "description": "5,000 buyers at once, stock 100",
+      "stock": 100,
+      "duration_s": 5.2,
+      "http_requests": 16767,
+      "throughput_rps": 3531.8,
+      "buyers_per_s": 1053.2,
+      "buyers": 5000,
+      "latency_ms": {
+        "p50": 242.1,
+        "p95": 1217.4,
+        "p99": 2795.6
+      },
+      "buy_latency_ms": {
+        "p50": 5.4,
+        "p95": 265.3,
+        "p99": 533.6
+      },
+      "error_rate_pct": 0,
+      "rate_limited": 0,
+      "buyers_purchased": 100,
+      "buyers_sold_out": 4900,
+      "buyers_abandoned": 0,
+      "confirmed_orders": 100,
+      "oversold_units": 0,
+      "stock_left": 0,
+      "reconcile_ok": true,
+      "reconcile_output": "[OK  ] sale 7 (safe): 100 orders / 100 units"
+    },
+    {
+      "scenario": "abandon",
+      "mode": "naive",
+      "description": "10 buyers/s for 60 s, 70% abandon, stock 100, 10 s reservation TTL",
+      "stock": 100,
+      "duration_s": 60.2,
+      "http_requests": 176,
+      "throughput_rps": 2.9,
+      "buyers_per_s": 10,
+      "buyers": 601,
+      "latency_ms": {
+        "p50": 3.9,
+        "p95": 6,
+        "p99": 8
+      },
+      "buy_latency_ms": {
+        "p50": 3.9,
+        "p95": 6,
+        "p99": 8
+      },
+      "error_rate_pct": 0,
+      "rate_limited": 0,
+      "buyers_purchased": 100,
+      "buyers_sold_out": 76,
+      "buyers_abandoned": 425,
+      "confirmed_orders": 100,
+      "oversold_units": 0,
+      "stock_left": 0,
+      "reconcile_ok": true,
+      "reconcile_output": "[OK  ] sale 8 (naive): 100 orders / 100 units"
+    },
+    {
+      "scenario": "abandon",
+      "mode": "safe",
+      "description": "10 buyers/s for 60 s, 70% abandon, stock 100, 10 s reservation TTL",
+      "stock": 100,
+      "duration_s": 61.4,
+      "http_requests": 1977,
+      "throughput_rps": 32.3,
+      "buyers_per_s": 9.8,
+      "buyers": 601,
+      "latency_ms": {
+        "p50": 1.8,
+        "p95": 3.7,
+        "p99": 5.8
+      },
+      "buy_latency_ms": {
+        "p50": 1.2,
+        "p95": 1.7,
+        "p99": 2.7
+      },
+      "error_rate_pct": 0,
+      "rate_limited": 0,
+      "buyers_purchased": 84,
+      "buyers_sold_out": 291,
+      "buyers_abandoned": 226,
+      "confirmed_orders": 84,
+      "oversold_units": 0,
+      "stock_left": 16,
+      "reconcile_ok": true,
+      "reconcile_output": "[OK  ] sale 9 (safe): 84 orders / 100 units"
+    }
+  ]
+}
