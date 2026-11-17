@@ -1,0 +1,65 @@
+# One command: docker compose up --build
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql://rushline:rushline@postgres:5432/rushline
+  REDIS_URL: redis://redis:6379/0
+  HMAC_SECRET: ${HMAC_SECRET:-dev-secret-change-me}
+  RESERVATION_TTL_SECONDS: ${RESERVATION_TTL_SECONDS:-120}
+  ADMISSION_RATE_PER_SECOND: ${ADMISSION_RATE_PER_SECOND:-50}
+  RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-30}
+  RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-10}
+  PAYMENT_FAILURE_RATE: ${PAYMENT_FAILURE_RATE:-0.05}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rushline
+      POSTGRES_PASSWORD: rushline
+      POSTGRES_DB: rushline
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rushline"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ./backend
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment: *backend-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  # Run with: docker compose run --rm tests   (uses Redis db 1, never touches live data in db 0)
+  tests:
+    build: ./backend
+    profiles: ["test"]
+    command: ["pytest", "-v"]
+    environment:
+      <<: *backend-env
+      REDIS_URL: redis://redis:6379/1
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  pgdata:
